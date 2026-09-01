@@ -3,8 +3,8 @@
 ## Evidence
 
 - Source visual truth: `docs/labelrobomaster-reference.png`
-- Implementation screenshot: `docs/implementation-initial.png`
-- Side-by-side comparison: `docs/design-qa-comparison-initial.jpg`
+- Implementation screenshot: `docs/implementation-coverage-line-width-1501.png`
+- Side-by-side comparison: `docs/design-qa-comparison-coverage-line-width.jpg`
 - Source pixels: 1501 × 831
 - Implementation pixels: 1501 × 831
 - Browser CSS viewport: 1501 × 831
@@ -33,6 +33,8 @@ A separate focused crop was not required because both source and implementation 
 - Undoing a relabel: passed.
 - Previous/next image navigation: passed.
 - Zoom controls: passed.
+- Page coverage metric: passed. The displayed value updates after drawing and undoing a region, and overlapping regions are counted once through union-area calculation.
+- Bounding-box line width: passed. The default is 1 px and the slider plus decrement/increment controls cover the supported 0.5–3 px range.
 - JSON export action and success state: passed. The in-app browser did not expose a download event, but the application showed the post-export success state and emitted no error.
 - Browser console warnings/errors: none.
 
@@ -43,6 +45,7 @@ No actionable P0, P1, or P2 visual or interaction differences remain. The implem
 ## Comparison history
 
 - Initial pass: no P0/P1/P2 issues found. No visual fix iteration was required.
+- Coverage/line-width pass: added a compact page-coverage card without changing the three-column layout. The first 0.5 px implementation used a CSS border, which the browser rounded visually; it was replaced with an inset box shadow so subpixel widths render correctly. Live coverage, undo, and line-width controls were verified in-browser with no console errors.
 
 ## Follow-up polish
 
@@ -55,6 +58,8 @@ No actionable P0, P1, or P2 visual or interaction differences remain. The implem
 - [x] Surface exactly six labels.
 - [x] Use real sample assets.
 - [x] Verify primary annotation interactions.
+- [x] Verify union-area page coverage and overlap handling.
+- [x] Verify adjustable 0.5–3 px bounding-box lines.
 - [x] Confirm production build and Sites packaging tests.
 
 final result: passed

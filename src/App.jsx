@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowCounterClockwise, ArrowLeft, ArrowRight, BoundingBox, CaretDown, Check,
   DownloadSimple, FileArrowUp, FolderOpen, ImageSquare, MagnifyingGlassMinus,
-  MagnifyingGlassPlus, Trash, UploadSimple,
+  MagnifyingGlassPlus, Minus, Plus, Trash, UploadSimple,
 } from "@phosphor-icons/react";
+import { calculateUnionArea } from "./geometry.js";
 
 const LABELS = [
   { id: "arrow", name: "Arrow", key: "1", color: "#ff6b57" },
@@ -46,6 +47,11 @@ function loadSavedAnnotations() {
   }
 }
 
+function loadStrokeWidth() {
+  const saved = Number(localStorage.getItem("figure-region-annotator:stroke-width"));
+  return saved >= 0.5 && saved <= 3 ? saved : 1;
+}
+
 function normalizedBox(start, end) {
   return [
     round(Math.min(start.x, end.x)), round(Math.min(start.y, end.y)),
@@ -74,12 +80,18 @@ export function App() {
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const [history, setHistory] = useState([]);
   const [notice, setNotice] = useState("Ready to annotate");
+  const [strokeWidth, setStrokeWidth] = useState(loadStrokeWidth);
   const fileInputRef = useRef(null);
   const jsonInputRef = useRef(null);
   const overlayRef = useRef(null);
 
   const activeImage = images[activeIndex];
   const regions = annotations[activeImage?.id] ?? [];
+  const coverageRatio = useMemo(
+    () => calculateUnionArea(regions.map(({ bbox }) => bbox)),
+    [regions],
+  );
+  const coveragePercent = `${(coverageRatio * 100).toFixed(1)}%`;
   const completedCount = useMemo(
     () => images.filter((image) => (annotations[image.id] ?? []).length > 0).length,
     [images, annotations],
@@ -88,6 +100,10 @@ export function App() {
   useEffect(() => {
     localStorage.setItem("figure-region-annotator:v1", JSON.stringify(annotations));
   }, [annotations]);
+
+  useEffect(() => {
+    localStorage.setItem("figure-region-annotator:stroke-width", String(strokeWidth));
+  }, [strokeWidth]);
 
   useEffect(() => {
     setSelectedId(null);
@@ -300,7 +316,7 @@ export function App() {
   const progress = images.length ? Math.round((completedCount / images.length) * 100) : 0;
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" style={{ "--box-stroke": `${strokeWidth}px` }}>
       <header className="topbar">
         <AppLogo />
         <div className="topbar-center">
@@ -397,6 +413,14 @@ export function App() {
             <div><span className="eyebrow">ANNOTATIONS</span><h2>Regions <span>{regions.length}</span></h2></div>
             <button className="icon-button danger" type="button" aria-label="Delete selected region" disabled={!selectedId} onClick={() => deleteRegion()}><Trash size={18} /></button>
           </div>
+          <div className="coverage-card">
+            <div className="coverage-heading">
+              <div><span className="eyebrow">PAGE COVERAGE</span><p>Unique marked area</p></div>
+              <strong>{coveragePercent}</strong>
+            </div>
+            <div className="coverage-track" aria-label={`Marked page coverage ${coveragePercent}`}><span style={{ width: coveragePercent }} /></div>
+            <small>Overlapping regions are counted once.</small>
+          </div>
           {selectedRegion && (
             <div className="selection-editor">
               <span className="eyebrow">SELECTED REGION</span>
@@ -422,6 +446,23 @@ export function App() {
                 </button>
               );
             })}
+          </div>
+          <div className="display-card">
+            <div className="display-heading"><span className="eyebrow">BOX LINE WIDTH</span><output>{strokeWidth.toFixed(1)} px</output></div>
+            <div className="line-width-control">
+              <button type="button" aria-label="Decrease bounding box line width" disabled={strokeWidth <= 0.5} onClick={() => setStrokeWidth((value) => Math.max(0.5, value - 0.5))}><Minus size={13} weight="bold" /></button>
+              <input
+                aria-label="Bounding box line width"
+                type="range"
+                min="0.5"
+                max="3"
+                step="0.5"
+                value={strokeWidth}
+                onChange={(event) => setStrokeWidth(Number(event.target.value))}
+              />
+              <button type="button" aria-label="Increase bounding box line width" disabled={strokeWidth >= 3} onClick={() => setStrokeWidth((value) => Math.min(3, value + 0.5))}><Plus size={13} weight="bold" /></button>
+            </div>
+            <div className="range-labels"><span>Hairline</span><span>Bold</span></div>
           </div>
           <div className="schema-card"><span className="eyebrow">OUTPUT FORMAT</span><code>normalized_xyxy</code><p>Each box is stored as [x1, y1, x2, y2] in the 0–1 coordinate space.</p></div>
         </aside>

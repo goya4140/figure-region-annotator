@@ -21,6 +21,8 @@ The interface is inspired by the practical three-column workspace of [LabelRoboM
 - Import local PNG, JPG, and WebP files.
 - Import and export a single portable JSON annotation file.
 - Autosave annotation state in browser local storage.
+- Show the union coverage ratio of all marked regions on the current image; overlaps count once.
+- Adjust annotation box line width from a 0.5 px hairline to 3 px.
 - Four academic-figure samples are included for immediate testing.
 
 ## Run locally

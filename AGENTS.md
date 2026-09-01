@@ -6,6 +6,8 @@
 - Preserve the lightweight workflow: draw rectangular regions, assign exactly one of `arrow`, `shape`, `image`, `chart`, `text`, or `equation`, and exchange annotations as JSON.
 - Do not add automatic labeling, model inference, accounts, a backend, collaboration, or dataset-management complexity unless explicitly requested.
 - The visual reference is LabelRoboMaster: a practical central canvas with file controls on the left and annotation objects on the right, modernized without losing its dense labeling-workstation character.
+- Show the current image's marked-area coverage as the union of all normalized rectangles divided by total page area; overlapping regions count once.
+- Annotation borders default to a thin 1 px line, and users can adjust the display width from 0.5 px to 3 px without changing annotation geometry.
 
 Run the local server yourself and open the preview in the browser available to this environment. Do not give the user server-start instructions when you can run it.
 
