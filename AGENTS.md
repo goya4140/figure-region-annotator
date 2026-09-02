@@ -8,6 +8,8 @@
 - The visual reference is LabelRoboMaster: a practical central canvas with file controls on the left and annotation objects on the right, modernized without losing its dense labeling-workstation character.
 - Show the current image's marked-area coverage as the union of all normalized rectangles divided by total page area; overlapping regions count once.
 - Annotation borders default to a thin 1 px line, and users can adjust the display width from 0.5 px to 3 px without changing annotation geometry.
+- The primary import unit is a dataset folder with an `images/` directory and exactly one root JSON file; match JSON image entries by `file_name`.
+- Annotators can explicitly confirm that an unsuitable image should be removed. When writable directory access is available, remove the image file and synchronously rewrite the JSON; in read-only fallback mode, clearly state that deletion only affects the working dataset and exported JSON.
 
 Run the local server yourself and open the preview in the browser available to this environment. Do not give the user server-start instructions when you can run it.
 

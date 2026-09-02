@@ -4,6 +4,7 @@ import {
   DownloadSimple, FileArrowUp, FolderOpen, ImageSquare, MagnifyingGlassMinus,
   MagnifyingGlassPlus, Minus, Plus, Trash, UploadSimple,
 } from "@phosphor-icons/react";
+import { buildDatasetState, buildExportPayload, isSupportedImageName, validateDatasetFiles } from "./dataset.js";
 import { calculateUnionArea } from "./geometry.js";
 
 const LABELS = [
@@ -81,9 +82,15 @@ export function App() {
   const [history, setHistory] = useState([]);
   const [notice, setNotice] = useState("Ready to annotate");
   const [strokeWidth, setStrokeWidth] = useState(loadStrokeWidth);
-  const fileInputRef = useRef(null);
+  const [datasetName, setDatasetName] = useState("Figure-to-PPTX Regions");
+  const [datasetPayload, setDatasetPayload] = useState({});
+  const [datasetAccess, setDatasetAccess] = useState("sample");
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const folderInputRef = useRef(null);
   const jsonInputRef = useRef(null);
   const overlayRef = useRef(null);
+  const datasetHandlesRef = useRef(null);
 
   const activeImage = images[activeIndex];
   const regions = annotations[activeImage?.id] ?? [];
@@ -238,6 +245,10 @@ export function App() {
 
   useEffect(() => {
     const onKeyDown = (event) => {
+      if (deleteTarget) {
+        if (event.key === "Escape" && !deleteBusy) setDeleteTarget(null);
+        return;
+      }
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return;
       const label = LABELS.find((item) => item.key === event.key);
       if (label) {
@@ -259,35 +270,85 @@ export function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [changeImage, deleteRegion, selectedId, setRegionLabel, undo]);
+  }, [changeImage, deleteBusy, deleteRegion, deleteTarget, selectedId, setRegionLabel, undo]);
 
-  const handleImageFiles = (event) => {
-    const files = [...event.target.files].filter((file) => file.type.startsWith("image/"));
-    if (!files.length) return;
-    const imported = files.map((file, index) => ({ id: `local-${Date.now()}-${index}`, name: file.name, src: URL.createObjectURL(file), source: "Local file" }));
-    setImages((current) => [...current, ...imported]);
-    setActiveIndex(images.length);
-    setNotice(`${files.length} image${files.length > 1 ? "s" : ""} imported`);
+  const revokeImportedUrls = (items) => {
+    for (const image of items) {
+      if (image.src?.startsWith("blob:")) URL.revokeObjectURL(image.src);
+    }
+  };
+
+  const applyDataset = async ({ name, jsonFile, imageFiles, handles = null, access = "readonly" }) => {
+    const payload = JSON.parse(await jsonFile.text());
+    const next = buildDatasetState(imageFiles, payload);
+    if (!next.images.length) throw new Error("No supported images were found in the images folder.");
+    next.images = next.images.map((image) => ({ ...image, source: `Dataset · ${name}` }));
+    revokeImportedUrls(images);
+    setImages(next.images);
+    setAnnotations(next.annotations);
+    setDatasetName(name);
+    setDatasetPayload(payload);
+    setDatasetAccess(access);
+    datasetHandlesRef.current = handles;
+    setActiveIndex(0);
+    setSelectedId(null);
+    setHistory([]);
+    setImageSize({ width: 0, height: 0 });
+    setNotice(`${next.images.length} images loaded from ${name}`);
+  };
+
+  const importDatasetFiles = async (event) => {
+    try {
+      const dataset = validateDatasetFiles(event.target.files);
+      await applyDataset({
+        name: dataset.datasetName,
+        jsonFile: dataset.jsonFile,
+        imageFiles: dataset.imageFiles,
+        access: "readonly",
+      });
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not open this dataset folder");
+    }
     event.target.value = "";
   };
 
+  const openDatasetFolder = async () => {
+    if (!("showDirectoryPicker" in window)) {
+      folderInputRef.current?.click();
+      return;
+    }
+    try {
+      const rootHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+      const rootEntries = [];
+      for await (const entry of rootHandle.values()) rootEntries.push(entry);
+      const jsonHandles = rootEntries.filter((entry) => entry.kind === "file" && entry.name.toLowerCase().endsWith(".json"));
+      const imagesHandle = rootEntries.find((entry) => entry.kind === "directory" && entry.name.toLowerCase() === "images");
+      if (jsonHandles.length !== 1) throw new Error("The dataset folder must contain exactly one JSON file at its root.");
+      if (!imagesHandle) throw new Error("The dataset folder must contain an images folder.");
+      const imageFiles = [];
+      for await (const entry of imagesHandle.values()) {
+        if (entry.kind === "file" && isSupportedImageName(entry.name)) imageFiles.push(await entry.getFile());
+      }
+      if (!imageFiles.length) throw new Error("No PNG, JPG, or WebP files were found in images/.");
+      await applyDataset({
+        name: rootHandle.name,
+        jsonFile: await jsonHandles[0].getFile(),
+        imageFiles,
+        handles: { rootHandle, imagesHandle, jsonHandle: jsonHandles[0] },
+        access: "writable",
+      });
+    } catch (error) {
+      if (error?.name !== "AbortError") setNotice(error instanceof Error ? error.message : "Could not open this dataset folder");
+    }
+  };
+
   const exportJson = () => {
-    const payload = {
-      version: "1.0",
-      coordinate_system: "normalized_xyxy",
-      labels: LABELS.map(({ id }) => id),
-      images: images.map((image) => ({
-        image_id: image.id,
-        file_name: image.name,
-        image_size: image.id === activeImage.id ? imageSize : undefined,
-        regions: annotations[image.id] ?? [],
-      })),
-    };
+    const payload = buildExportPayload({ images, annotations, originalPayload: datasetPayload, activeImageId: activeImage?.id, imageSize });
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `figure-regions-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.download = `${datasetName.replace(/[^a-z0-9_-]+/gi, "-").toLowerCase()}-${new Date().toISOString().slice(0, 10)}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
     setNotice("Annotation JSON exported");
@@ -312,6 +373,54 @@ export function App() {
     event.target.value = "";
   };
 
+  const writeDatasetJson = async (payload) => {
+    const jsonHandle = datasetHandlesRef.current?.jsonHandle;
+    if (!jsonHandle) return;
+    const writable = await jsonHandle.createWritable();
+    await writable.write(JSON.stringify(payload, null, 2));
+    await writable.close();
+  };
+
+  const deleteCurrentImage = async () => {
+    if (!deleteTarget || deleteBusy) return;
+    setDeleteBusy(true);
+    const target = deleteTarget;
+    const targetIndex = images.findIndex((image) => image.id === target.id);
+    const remainingImages = images.filter((image) => image.id !== target.id);
+    const remainingAnnotations = { ...annotations };
+    delete remainingAnnotations[target.id];
+    const previousPayload = buildExportPayload({ images, annotations, originalPayload: datasetPayload, activeImageId: activeImage?.id, imageSize });
+    const nextPayload = buildExportPayload({ images: remainingImages, annotations: remainingAnnotations, originalPayload: datasetPayload });
+
+    try {
+      if (datasetAccess === "writable") {
+        await writeDatasetJson(nextPayload);
+        try {
+          await datasetHandlesRef.current.imagesHandle.removeEntry(target.diskName || target.name);
+        } catch (error) {
+          await writeDatasetJson(previousPayload);
+          throw error;
+        }
+      }
+      if (target.src?.startsWith("blob:")) URL.revokeObjectURL(target.src);
+      setImages(remainingImages);
+      setAnnotations(remainingAnnotations);
+      setDatasetPayload(nextPayload);
+      setActiveIndex(remainingImages.length ? Math.min(targetIndex, remainingImages.length - 1) : 0);
+      setSelectedId(null);
+      setHistory([]);
+      setImageSize({ width: 0, height: 0 });
+      setDeleteTarget(null);
+      setNotice(datasetAccess === "writable"
+        ? `${target.name} deleted from images/ and JSON`
+        : `${target.name} removed from the working dataset; export JSON to save`);
+    } catch {
+      setNotice(`Could not delete ${target.name}; the dataset was left unchanged`);
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
   const selectedRegion = regions.find((region) => region.id === selectedId);
   const progress = images.length ? Math.round((completedCount / images.length) * 100) : 0;
 
@@ -321,7 +430,7 @@ export function App() {
         <AppLogo />
         <div className="topbar-center">
           <span className="project-label">BENCHMARK DATASET</span>
-          <button className="project-select" type="button">Figure-to-PPTX Regions <CaretDown size={14} weight="bold" /></button>
+          <button className="project-select" type="button">{datasetName} <CaretDown size={14} weight="bold" /></button>
         </div>
         <div className="topbar-actions">
           <button className="button ghost" type="button" onClick={() => jsonInputRef.current?.click()}><UploadSimple size={17} /> Import JSON</button>
@@ -333,10 +442,10 @@ export function App() {
         <aside className="file-panel">
           <div className="panel-heading">
             <div><span className="eyebrow">SOURCE IMAGES</span><h2>Image queue</h2></div>
-            <button className="icon-button" type="button" aria-label="Import images" onClick={() => fileInputRef.current?.click()}><FolderOpen size={19} /></button>
+            <button className="icon-button" type="button" aria-label="Open dataset folder" onClick={openDatasetFolder}><FolderOpen size={19} /></button>
           </div>
-          <button className="import-card" type="button" onClick={() => fileInputRef.current?.click()}>
-            <FileArrowUp size={22} /><span><strong>Open images</strong><small>PNG, JPG or WebP</small></span>
+          <button className="import-card" type="button" onClick={openDatasetFolder}>
+            <FileArrowUp size={22} /><span><strong>Open dataset folder</strong><small>images/ + one JSON file</small></span>
           </button>
           <div className="progress-block">
             <div className="progress-copy"><span>{completedCount} / {images.length} annotated</span><strong>{progress}%</strong></div>
@@ -361,7 +470,8 @@ export function App() {
 
         <main className="canvas-column">
           <div className="canvas-toolbar">
-            <div className="image-identity"><ImageSquare size={18} /><div><strong>{activeImage?.name}</strong><small>{imageSize.width || "—"} × {imageSize.height || "—"} px</small></div></div>
+            <div className="image-identity"><ImageSquare size={18} /><div><strong>{activeImage?.name || "No image selected"}</strong><small>{activeImage ? `${imageSize.width || "—"} × ${imageSize.height || "—"} px` : "Open a dataset folder"}</small></div></div>
+            <button className="icon-button danger delete-image-button" type="button" aria-label="Remove current image from dataset" disabled={!activeImage} onClick={() => setDeleteTarget(activeImage)} title="Remove image from dataset"><Trash size={17} /></button>
             <div className="label-strip" aria-label="Annotation labels">
               {LABELS.map((label) => (
                 <button key={label.id} type="button" className={`label-tool ${activeLabel === label.id ? "active" : ""}`} style={{ "--label-color": label.color }} onClick={() => { setActiveLabel(label.id); if (selectedId) setRegionLabel(selectedId, label.id); }}>
@@ -377,8 +487,8 @@ export function App() {
           </div>
 
           <section className="canvas-workspace" aria-label="Annotation canvas">
-            <div className="canvas-instructions"><span className="pulse-dot" /> Drag anywhere on the image to create a <strong>{activeLabel}</strong> region</div>
-            <div className="image-stage" style={{ transform: `scale(${zoom})` }}>
+            {activeImage && <div className="canvas-instructions"><span className="pulse-dot" /> Drag anywhere on the image to create a <strong>{activeLabel}</strong> region</div>}
+            {activeImage ? <div className="image-stage" style={{ transform: `scale(${zoom})` }}>
               <img src={activeImage?.src} alt={activeImage?.name} draggable="false" onLoad={(event) => setImageSize({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} />
               <div className="annotation-layer" ref={overlayRef} onPointerDown={beginDraw} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
                 {regions.map((region, index) => {
@@ -394,14 +504,14 @@ export function App() {
                 })}
                 {draft && <div className="region-box draft" style={{ left: `${draft.bbox[0] * 100}%`, top: `${draft.bbox[1] * 100}%`, width: `${(draft.bbox[2] - draft.bbox[0]) * 100}%`, height: `${(draft.bbox[3] - draft.bbox[1]) * 100}%`, "--region-color": labelById(draft.label).color }} />}
               </div>
-            </div>
+            </div> : <div className="canvas-empty"><FolderOpen size={34} /><strong>No images in this dataset</strong><p>Open another dataset folder to continue labeling.</p></div>}
           </section>
 
           <footer className="canvas-footer">
             <div className="status-copy"><span className="status-light" />{notice}</div>
             <div className="navigation-controls">
               <button type="button" onClick={() => changeImage(-1)} disabled={activeIndex === 0}><ArrowLeft size={17} /> Previous</button>
-              <strong>{activeIndex + 1} <span>/ {images.length}</span></strong>
+              <strong>{images.length ? activeIndex + 1 : 0} <span>/ {images.length}</span></strong>
               <button type="button" onClick={() => changeImage(1)} disabled={activeIndex === images.length - 1}>Next <ArrowRight size={17} /></button>
             </div>
             <button className="undo-button" type="button" onClick={undo} disabled={!history.length}><ArrowCounterClockwise size={17} /> Undo</button>
@@ -468,8 +578,26 @@ export function App() {
         </aside>
       </div>
 
-      <input ref={fileInputRef} className="sr-only" type="file" multiple accept="image/png,image/jpeg,image/webp" onChange={handleImageFiles} />
+      <input ref={folderInputRef} className="sr-only" type="file" webkitdirectory="" directory="" multiple onChange={importDatasetFiles} />
       <input ref={jsonInputRef} className="sr-only" type="file" accept="application/json" onChange={importJson} />
+      {deleteTarget && (
+        <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !deleteBusy) setDeleteTarget(null); }}>
+          <section className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-image-title" aria-describedby="delete-image-description">
+            <span className="dialog-icon"><Trash size={22} weight="bold" /></span>
+            <div>
+              <span className="eyebrow">REMOVE FROM DATASET</span>
+              <h2 id="delete-image-title">Delete {deleteTarget.name}?</h2>
+              <p id="delete-image-description">{datasetAccess === "writable"
+                ? "This permanently deletes the image from images/ and removes its entry from the dataset JSON. This cannot be undone."
+                : "This removes the image and its JSON entry from the current working dataset. The original local file will stay on disk until you remove it manually."}</p>
+            </div>
+            <div className="dialog-actions">
+              <button className="button ghost" type="button" disabled={deleteBusy} onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button className="button destructive" type="button" disabled={deleteBusy} onClick={deleteCurrentImage}>{deleteBusy ? "Deleting…" : "Delete image"}</button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
