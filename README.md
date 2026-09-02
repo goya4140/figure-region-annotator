@@ -1,5 +1,7 @@
 # FigureLabel
 
+> 🇨🇳 中文使用手册：[`USAGE.zh-CN.md`](USAGE.zh-CN.md)
+
 A lightweight, browser-based region annotation tool for the Figure-to-PPTX benchmark. Annotators only draw rectangular regions and assign one of six labels:
 
 - `arrow`
