@@ -21,16 +21,25 @@ FigureLabel 是面向 Figure-to-PPTX Benchmark 的浏览器区域标注工具。
 git clone https://github.com/goya4140/figure-region-annotator.git
 cd figure-region-annotator
 npm install
-npm run dev
+npm start
 ```
 
-打开终端输出的本地地址，通常为 `http://localhost:5173/`。
+命令会生成生产版网页，在本机 `http://127.0.0.1:4173/` 启动服务，并自动打开默认浏览器。
 
 ### 方式二：下载 ZIP
 
 1. 进入 GitHub 仓库页面。
 2. 点击 **Code → Download ZIP**。
-3. 解压后进入目录，运行 `npm install` 和 `npm run dev`。
+3. 解压后进入目录，运行 `npm install` 和 `npm start`。
+
+### 方式三：双击启动（推荐给标注员）
+
+- macOS：双击 `START_HERE.command`；
+- Windows：双击 `START_HERE.bat`。
+
+首次启动时，脚本会自动安装依赖，然后打开本地标注页面。标注期间请保持启动窗口运行；关闭窗口或按 `Ctrl+C` 即可停止本地服务。
+
+> 工具只监听本机 `127.0.0.1`。图片和标注数据在本地浏览器中处理，不会上传到远程服务器。
 
 环境要求：
 
@@ -211,3 +220,4 @@ npm run build
 npm run preview
 ```
 
+日常标注请使用 `npm start` 或双击启动脚本；`npm run dev` 仅用于开发调试。

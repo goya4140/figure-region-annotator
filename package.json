@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "start": "npm run build && vite preview --host 127.0.0.1 --port 4173 --strictPort --open",
     "test": "node --test tests/coverage.test.mjs tests/dataset.test.mjs",
     "build": "vite build && node scripts/prepare-sites-build.mjs",
     "preview": "vite preview",

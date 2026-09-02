@@ -28,14 +28,23 @@ The interface is inspired by the practical three-column workspace of [LabelRoboM
 - Adjust annotation box line width from a 0.5 px hairline to 3 px.
 - Four academic-figure samples are included for immediate testing.
 
-## Run locally
+## Run locally for annotation
 
 ```bash
 npm install
-npm run dev
+npm start
 ```
 
-Then open the URL printed by Vite.
+The production build is served at `http://127.0.0.1:4173/` and the default browser opens automatically. The server only listens on the local computer: images and annotations are handled in the browser and are not uploaded to a remote service.
+
+Annotators who do not use the terminal can double-click:
+
+- macOS: `START_HERE.command`
+- Windows: `START_HERE.bat`
+
+The launcher installs project dependencies on first use and then opens the local annotation page. Keep the launcher window open while annotating; close it or press `Ctrl+C` to stop the local page.
+
+For frontend development with hot reload, use `npm run dev` instead.
 
 ## Dataset folder format
 
