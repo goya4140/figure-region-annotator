@@ -11,6 +11,7 @@
 - The primary import unit is a dataset folder with an `images/` directory and exactly one root JSON file; match JSON image entries by `file_name`.
 - Annotators can explicitly confirm that an unsuitable image should be removed. When writable directory access is available, remove the image file and synchronously rewrite the JSON; in read-only fallback mode, clearly state that deletion only affects the working dataset and exported JSON.
 - The annotator-facing deployment is local-first: `npm start` and the macOS/Windows launchers serve the production UI on `127.0.0.1`, open the local page, and keep image and annotation handling on the annotator's computer without a remote backend.
+- Annotation changes autosave to browser storage for crash recovery, and an explicit Save Progress action persists the full JSON in place when the dataset folder is writable or downloads a JSON snapshot in read-only mode. Reopening matching image IDs restores locally cached work.
 
 Run the local server yourself and open the preview in the browser available to this environment. Do not give the user server-start instructions when you can run it.
 

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowCounterClockwise, ArrowLeft, ArrowRight, BoundingBox, CaretDown, Check,
-  DownloadSimple, FileArrowUp, FolderOpen, ImageSquare, MagnifyingGlassMinus,
+  DownloadSimple, FileArrowUp, FloppyDisk, FolderOpen, ImageSquare, MagnifyingGlassMinus,
   MagnifyingGlassPlus, Minus, Plus, Trash, UploadSimple,
 } from "@phosphor-icons/react";
-import { buildDatasetState, buildExportPayload, isSupportedImageName, validateDatasetFiles } from "./dataset.js";
+import { buildDatasetState, buildExportPayload, isSupportedImageName, restoreMatchingAnnotations, validateDatasetFiles } from "./dataset.js";
 import { calculateUnionArea } from "./geometry.js";
 
 const LABELS = [
@@ -87,6 +87,7 @@ export function App() {
   const [datasetAccess, setDatasetAccess] = useState("sample");
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [saveBusy, setSaveBusy] = useState(false);
   const folderInputRef = useRef(null);
   const jsonInputRef = useRef(null);
   const overlayRef = useRef(null);
@@ -282,6 +283,8 @@ export function App() {
     const payload = JSON.parse(await jsonFile.text());
     const next = buildDatasetState(imageFiles, payload);
     if (!next.images.length) throw new Error("No supported images were found in the images folder.");
+    const locallySaved = loadSavedAnnotations();
+    next.annotations = restoreMatchingAnnotations(next.images, next.annotations, locallySaved);
     next.images = next.images.map((image) => ({ ...image, source: `Dataset · ${name}` }));
     revokeImportedUrls(images);
     setImages(next.images);
@@ -381,6 +384,27 @@ export function App() {
     await writable.close();
   };
 
+  const saveProgress = async () => {
+    if (saveBusy) return;
+    const payload = buildExportPayload({ images, annotations, originalPayload: datasetPayload, activeImageId: activeImage?.id, imageSize });
+    if (datasetAccess !== "writable") {
+      exportJson();
+      setNotice(`Read-only mode: progress downloaded as JSON (${completedCount}/${images.length} annotated)`);
+      return;
+    }
+
+    setSaveBusy(true);
+    try {
+      await writeDatasetJson(payload);
+      setDatasetPayload(payload);
+      setNotice(`Progress saved to dataset JSON (${completedCount}/${images.length} annotated)`);
+    } catch {
+      setNotice("Could not save progress to the dataset JSON");
+    } finally {
+      setSaveBusy(false);
+    }
+  };
+
   const deleteCurrentImage = async () => {
     if (!deleteTarget || deleteBusy) return;
     setDeleteBusy(true);
@@ -434,6 +458,7 @@ export function App() {
         </div>
         <div className="topbar-actions">
           <button className="button ghost" type="button" onClick={() => jsonInputRef.current?.click()}><UploadSimple size={17} /> Import JSON</button>
+          <button className="button save" type="button" disabled={saveBusy} onClick={saveProgress}><FloppyDisk size={17} weight="bold" /> {saveBusy ? "Saving…" : "Save Progress"}</button>
           <button className="button primary" type="button" onClick={exportJson}><DownloadSimple size={17} weight="bold" /> Export JSON</button>
         </div>
       </header>

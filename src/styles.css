@@ -32,6 +32,7 @@ button:focus-visible { outline: 2px solid #5f8ccf; outline-offset: 2px; }
 .topbar-actions { display: flex; gap: 8px; }
 .button { height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 13px; border-radius: 6px; border: 1px solid transparent; font-size: 12px; font-weight: 600; cursor: pointer; }
 .button.ghost { color: #d0d2cc; background: #2a2d28; border-color: #40433d; }
+.button.save { color: #e7f6c7; background: #35442a; border-color: #60794b; }
 .button.primary { color: #1f2419; background: var(--lime); border-color: #d8ff75; }
 .button.destructive { color: #fff; background: #b5483b; border-color: #9d382d; }
 .button:disabled { opacity: .55; cursor: default; }

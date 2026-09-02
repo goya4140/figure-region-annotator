@@ -55,6 +55,15 @@ export function buildDatasetState(imageFiles, payload, createUrl = URL.createObj
   return { images, annotations };
 }
 
+export function restoreMatchingAnnotations(images, fileAnnotations, savedAnnotations) {
+  return Object.fromEntries(images.map((image) => [
+    image.id,
+    Array.isArray(savedAnnotations?.[image.id])
+      ? savedAnnotations[image.id]
+      : (fileAnnotations?.[image.id] ?? []),
+  ]));
+}
+
 export function buildExportPayload({ images, annotations, originalPayload = {}, activeImageId, imageSize }) {
   return {
     ...originalPayload,

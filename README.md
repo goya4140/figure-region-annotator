@@ -22,8 +22,9 @@ The interface is inspired by the practical three-column workspace of [LabelRoboM
 - Undo with `Cmd/Ctrl + Z`; delete the selected box with `Delete`.
 - Open a dataset folder containing an `images/` directory and exactly one root-level JSON file.
 - Import and export a single portable JSON annotation file.
+- Save progress explicitly: writable dataset folders update their root JSON in place; read-only imports download a JSON snapshot instead.
 - Remove unsuitable images from the dataset together with their JSON entries. With writable folder access, the source image and JSON are updated on disk after confirmation.
-- Autosave annotation state in browser local storage.
+- Autosave annotation state in browser local storage and restore matching image annotations when reopening a dataset.
 - Show the union coverage ratio of all marked regions on the current image; overlaps count once.
 - Adjust annotation box line width from a 0.5 px hairline to 3 px.
 - Four academic-figure samples are included for immediate testing.

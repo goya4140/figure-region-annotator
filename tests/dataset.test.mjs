@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { baseName, buildDatasetState, buildExportPayload, validateDatasetFiles } from "../src/dataset.js";
+import { baseName, buildDatasetState, buildExportPayload, restoreMatchingAnnotations, validateDatasetFiles } from "../src/dataset.js";
 
 const file = (name, relative) => ({ name, webkitRelativePath: relative });
 
@@ -43,4 +43,15 @@ test("export omits a deleted image and its JSON entry", () => {
 test("baseName accepts slash styles", () => {
   assert.equal(baseName("images/a.png"), "a.png");
   assert.equal(baseName("images\\a.png"), "a.png");
+});
+
+test("restores cached work only for matching image ids", () => {
+  const images = [{ id: "keep" }, { id: "disk-only" }];
+  const disk = { keep: [{ id: "old" }], "disk-only": [{ id: "disk" }] };
+  const saved = { keep: [{ id: "cached" }], unrelated: [{ id: "ignore" }] };
+
+  assert.deepEqual(restoreMatchingAnnotations(images, disk, saved), {
+    keep: [{ id: "cached" }],
+    "disk-only": [{ id: "disk" }],
+  });
 });
